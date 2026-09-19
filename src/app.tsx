@@ -164,13 +164,11 @@ function ToolPartView({
 			details = (
 				<div className="space-y-3 mb-4">
 					<div className="flex gap-2 items-center">
-						<Text
-							size="sm"
-							bold
-							className="text-kumo-default uppercase tracking-wider"
-						>
-							{input.actionType || "UNKNOWN"}
-						</Text>
+						<span className="text-kumo-default uppercase tracking-wider">
+							<Text size="sm" bold>
+								{input.actionType || "UNKNOWN"}
+							</Text>
+						</span>
 						<Badge
 							variant="secondary"
 							className="border-purple-500/30 text-purple-600 bg-purple-500/10"
@@ -235,9 +233,11 @@ function ToolPartView({
 								<Text size="xs" variant="secondary" bold>
 									Matched Incident
 								</Text>
-								<Text size="sm" className="font-mono mt-1 text-kumo-subtle">
-									{input.matchedIncidentId}
-								</Text>
+								<span className="font-mono mt-1 text-kumo-subtle">
+									<Text size="sm">
+										{input.matchedIncidentId}
+									</Text>
+								</span>
 							</div>
 						)}
 					</div>
@@ -267,7 +267,7 @@ function ToolPartView({
 					<div className="flex gap-3 pt-2">
 						<Button
 							variant="primary"
-							size="md"
+							size="base"
 							icon={<CheckCircleIcon size={16} />}
 							onClick={() => {
 								if (approvalId) {
@@ -280,7 +280,7 @@ function ToolPartView({
 						</Button>
 						<Button
 							variant="secondary"
-							size="md"
+							size="base"
 							icon={<XCircleIcon size={16} />}
 							onClick={() => {
 								if (approvalId) {
