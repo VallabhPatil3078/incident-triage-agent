@@ -14,7 +14,13 @@ const mockIncidents: IncidentRecord[] = [
 		fix_summary: "Raise pool",
 		runbook_id: "RB-001",
 		success_count: 5,
-		fail_count: 0
+		fail_count: 0,
+		status: "resolved",
+		source: "seed",
+		outcome: "success",
+		occurred_at: 1000000,
+		resolved_at: 1000000,
+		merged_into: null
 	},
 	{
 		id: "INC-002",
@@ -27,7 +33,13 @@ const mockIncidents: IncidentRecord[] = [
 		fix_summary: "Raise timeout",
 		runbook_id: "RB-002",
 		success_count: 1,
-		fail_count: 1
+		fail_count: 1,
+		status: "resolved",
+		source: "seed",
+		outcome: "success",
+		occurred_at: 1000000,
+		resolved_at: 1000000,
+		merged_into: null
 	}
 ];
 
