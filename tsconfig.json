@@ -1,8 +1,8 @@
 {
-  "extends": "./node_modules/agents/agents.tsconfig.json",
-  "compilerOptions": {
-    // Runtime types come from `wrangler types` (env.d.ts), not the
-    // @cloudflare/workers-types package.
-    "types": ["node", "vite/client"]
-  }
+	"extends": "./node_modules/agents/agents.tsconfig.json",
+	"compilerOptions": {
+		// Runtime types come from `wrangler types` (env.d.ts), not the
+		// @cloudflare/workers-types package.
+		"types": ["node", "vite/client"]
+	}
 }
