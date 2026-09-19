@@ -257,6 +257,53 @@ ${getSchedulePrompt({ date: new Date() })}`,
           }
         }),
 
+        // Phase 4: Approval Gate
+        applyRemediation: tool({
+          description: "Apply a remediation step (mutating action) to an incident. ALWAYS requires user approval.",
+          inputSchema: z.object({
+            incidentId: z.string().describe("The ID of the incident"),
+            actionType: z.enum(["scale_pool", "restart_service", "rollback_deploy", "set_config", "move_to_dlq", "run_command"]).describe("The action type to perform"),
+            params: z.any().describe("JSON parameters for the action"),
+            rationale: z.string().describe("Why this action is being taken")
+          }),
+          needsApproval: async () => true,
+          execute: async ({ incidentId, actionType, params, rationale }) => {
+            // Re-validate incident exists
+            const incidents = this.sql`SELECT status FROM incidents WHERE id = ${incidentId}` as { status: string }[];
+            if (incidents.length === 0) return { error: "Incident not found" };
+
+            // Create an idempotency key (hash of incidentId + actionType + params)
+            const encoder = new TextEncoder();
+            const data = encoder.encode(`${incidentId}|${actionType}|${JSON.stringify(params)}`);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const idempotencyKey = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+            
+            // Check idempotency
+            const existingLog = this.sql`SELECT * FROM action_log WHERE idempotency_key = ${idempotencyKey}`;
+            if (existingLog.length > 0) {
+               return { error: "Action already executed (idempotency key matched). Cannot run the exact same action twice." };
+            }
+
+            const actionId = `ACT-${Date.now()}`;
+            const resultMsg = `Simulated execution of ${actionType} completed successfully`;
+            
+            this.sql`
+              INSERT INTO action_log (
+                id, idempotency_key, incident_id, action_type, params_json, rationale, status, result, simulated, executed_at
+              ) VALUES (
+                ${actionId}, ${idempotencyKey}, ${incidentId}, ${actionType}, ${JSON.stringify(params)}, ${rationale}, 'executed', ${resultMsg}, 1, ${Date.now()}
+              )
+            `;
+
+            return {
+               success: true,
+               actionId,
+               result: resultMsg,
+               note: "This was a simulated action."
+            };
+          }
+        }),
+
         // Server-side tool: runs automatically on the server
         getWeather: tool({
           description: "Get the current weather for a city",
