@@ -234,9 +234,7 @@ function ToolPartView({
 									Matched Incident
 								</Text>
 								<span className="font-mono mt-1 text-kumo-subtle">
-									<Text size="sm">
-										{input.matchedIncidentId}
-									</Text>
+									<Text size="sm">{input.matchedIncidentId}</Text>
 								</span>
 							</div>
 						)}
