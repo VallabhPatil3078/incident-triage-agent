@@ -165,6 +165,43 @@ If the user asks to schedule a task, use the schedule tool to schedule the task.
         // MCP tools from connected servers
         ...mcpTools,
 
+        // Phase 2: Signal Extraction Tools
+        getIncidentDetails: tool({
+          description: "Get detailed information about a specific incident.",
+          inputSchema: z.object({
+            id: z.string().describe("The ID of the incident (e.g. INC-001)")
+          }),
+          execute: async ({ id }) => {
+            const rows = this.sql`SELECT * FROM incidents WHERE id = ${id}`;
+            return rows.length > 0 ? rows[0] : { error: "Incident not found" };
+          }
+        }),
+
+        listIncidents: tool({
+          description: "List all incidents, optionally filtered by status.",
+          inputSchema: z.object({
+            status: z.enum(["active", "resolved", "all"]).describe("Status filter")
+          }),
+          execute: async ({ status }) => {
+            if (status === "all") {
+              return this.sql`SELECT id, title, severity, status FROM incidents`;
+            } else {
+              return this.sql`SELECT id, title, severity, status FROM incidents WHERE status = ${status}`;
+            }
+          }
+        }),
+
+        getRunbook: tool({
+          description: "Get the runbook for a specific error pattern or service.",
+          inputSchema: z.object({
+            error_type: z.string().describe("The error type to look up (e.g. PoolExhausted)")
+          }),
+          execute: async ({ error_type }) => {
+            const rows = this.sql`SELECT * FROM runbooks WHERE error_type = ${error_type}`;
+            return rows.length > 0 ? rows[0] : { error: "No runbook found for this error type" };
+          }
+        }),
+
         // Server-side tool: runs automatically on the server
         getWeather: tool({
           description: "Get the current weather for a city",
