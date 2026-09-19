@@ -150,11 +150,17 @@ export class ChatAgent extends AIChatAgent<Env> {
       model: workersai("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
         sessionAffinity: this.sessionAffinity
       }),
-      system: `You are a helpful assistant that can understand images. You can check the weather, get the user's timezone, run calculations, and schedule tasks. When users share images, describe what you see and answer questions about them.
+      system: `You are an Incident Triage Agent.
+1. When asked about active incidents, use the listIncidents tool.
+2. When investigating a specific incident:
+   - Call getIncidentDetails to get the context.
+   - Identify the error_type from the incident details.
+   - Call getRunbook for that error_type to find the mitigation steps.
+   - Propose the exact steps from the runbook's steps_json to the user.
+   - Do NOT execute the fix steps automatically.
+   - ALWAYS ask the user to confirm which steps to run.
 
-${getSchedulePrompt({ date: new Date() })}
-
-If the user asks to schedule a task, use the schedule tool to schedule the task.`,
+${getSchedulePrompt({ date: new Date() })}`,
       // Prune old tool calls and reasoning to save tokens on long conversations
       messages: pruneMessages({
         messages: await convertToModelMessages(this.messages),
