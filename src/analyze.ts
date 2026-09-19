@@ -55,7 +55,7 @@ export function normalizeError(text: string): string {
 
 	// Absolute paths to placeholders (e.g. /usr/src/app or C:\)
 	normalized = normalized.replace(/(?:\/[a-zA-Z0-9._-]+){2,}/g, "<PATH>");
-	normalized = normalized.replace(/[A-Z]:\\[a-zA-Z0-9._\\\-]+/gi, "<PATH>");
+	normalized = normalized.replace(/[A-Z]:\\[a-zA-Z0-9._\\-]+/gi, "<PATH>");
 
 	// Collapse repeated identical lines
 	const lines = normalized.split("\n");
