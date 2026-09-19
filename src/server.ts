@@ -73,7 +73,9 @@ export class ChatAgent extends AIChatAgent<Env, AgentState> {
     `;
 
 		// Phase 5 Migration: Add merged_into if it doesn't exist
-		const tableInfo = this.sql`PRAGMA table_info(incidents)` as any[];
+		const tableInfo = this.sql`PRAGMA table_info(incidents)` as {
+			name: string;
+		}[];
 		if (!tableInfo.some((col) => col.name === "merged_into")) {
 			this.sql`ALTER TABLE incidents ADD COLUMN merged_into TEXT`;
 		}
@@ -672,7 +674,7 @@ ${getSchedulePrompt({ date: new Date() })}`,
 								"run_command"
 							])
 							.describe("The action type to perform"),
-						params: z.any().describe("JSON parameters for the action"),
+						params: z.unknown().describe("JSON parameters for the action"),
 						rationale: z.string().describe("Why this action is being taken")
 					}),
 					needsApproval: async () => true,
