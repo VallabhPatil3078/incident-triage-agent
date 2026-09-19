@@ -148,42 +148,146 @@ function ToolPartView({
 	// Needs approval
 	if ("approval" in part && part.state === "approval-requested") {
 		const approvalId = (part.approval as { id?: string })?.id;
+
+		let title = `Approval needed: ${toolName}`;
+		let details = null;
+		let isSimulated = false;
+
+		if (toolName === "applyRemediation") {
+			title = "Simulate Remediation Action";
+			isSimulated = true;
+			const input = part.input as {
+				actionType?: string;
+				rationale?: string;
+				params?: Record<string, unknown>;
+			};
+			details = (
+				<div className="space-y-3 mb-4">
+					<div className="flex gap-2 items-center">
+						<Text
+							size="sm"
+							bold
+							className="text-kumo-default uppercase tracking-wider"
+						>
+							{input.actionType || "UNKNOWN"}
+						</Text>
+						<Badge
+							variant="secondary"
+							className="border-purple-500/30 text-purple-600 bg-purple-500/10"
+						>
+							SIMULATED
+						</Badge>
+					</div>
+					<div>
+						<Text size="xs" variant="secondary" bold>
+							Rationale
+						</Text>
+						<Text size="sm">{input.rationale || "No rationale provided"}</Text>
+					</div>
+					<div>
+						<Text size="xs" variant="secondary" bold>
+							Parameters
+						</Text>
+						<pre className="mt-1 px-3 py-2 rounded-lg bg-kumo-control text-xs text-kumo-default whitespace-pre-wrap overflow-auto border border-kumo-line">
+							{JSON.stringify(input.params || {}, null, 2)}
+						</pre>
+					</div>
+				</div>
+			);
+		} else if (toolName === "resolveIncident") {
+			title = "Resolve & Learn Incident";
+			const input = part.input as {
+				rootCause?: string;
+				fixSummary?: string;
+				outcome?: string;
+				matchedIncidentId?: string;
+			};
+			details = (
+				<div className="space-y-3 mb-4">
+					<div>
+						<Text size="xs" variant="secondary" bold>
+							Root Cause
+						</Text>
+						<Text size="sm">{input.rootCause || "Unknown"}</Text>
+					</div>
+					<div>
+						<Text size="xs" variant="secondary" bold>
+							Fix Summary
+						</Text>
+						<Text size="sm">{input.fixSummary || "Unknown"}</Text>
+					</div>
+					<div className="flex gap-4">
+						<div>
+							<Text size="xs" variant="secondary" bold>
+								Outcome
+							</Text>
+							<Badge
+								variant={
+									input.outcome === "success" ? "primary" : "destructive"
+								}
+								className="mt-1"
+							>
+								{input.outcome}
+							</Badge>
+						</div>
+						{input.matchedIncidentId && (
+							<div>
+								<Text size="xs" variant="secondary" bold>
+									Matched Incident
+								</Text>
+								<Text size="sm" className="font-mono mt-1 text-kumo-subtle">
+									{input.matchedIncidentId}
+								</Text>
+							</div>
+						)}
+					</div>
+				</div>
+			);
+		} else {
+			// Fallback
+			details = (
+				<div className="font-mono mb-4">
+					<Text size="xs" variant="secondary">
+						{JSON.stringify(part.input, null, 2)}
+					</Text>
+				</div>
+			);
+		}
+
 		return (
-			<div className="flex justify-start">
-				<Surface className="max-w-[85%] px-4 py-3 rounded-xl ring-2 ring-kumo-warning">
-					<div className="flex items-center gap-2 mb-2">
-						<GearIcon size={14} className="text-kumo-warning" />
-						<Text size="sm" bold>
-							Approval needed: {toolName}
+			<div className="flex justify-start w-full">
+				<Surface className="max-w-[85%] min-w-[300px] px-5 py-4 rounded-xl ring-2 ring-kumo-brand shadow-sm bg-kumo-elevated">
+					<div className="flex items-center gap-2 mb-4 border-b border-kumo-line pb-2">
+						<GearIcon size={16} className="text-kumo-brand" />
+						<Text size="base" bold>
+							{title}
 						</Text>
 					</div>
-					<div className="font-mono mb-3">
-						<Text size="xs" variant="secondary">
-							{JSON.stringify(part.input, null, 2)}
-						</Text>
-					</div>
-					<div className="flex gap-2">
+					{details}
+					<div className="flex gap-3 pt-2">
 						<Button
 							variant="primary"
-							size="sm"
-							icon={<CheckCircleIcon size={14} />}
+							size="md"
+							icon={<CheckCircleIcon size={16} />}
 							onClick={() => {
 								if (approvalId) {
 									addToolApprovalResponse({ id: approvalId, approved: true });
 								}
 							}}
+							className="flex-1 justify-center"
 						>
-							Approve
+							{isSimulated ? "Approve & Simulate" : "Approve"}
 						</Button>
 						<Button
 							variant="secondary"
-							size="sm"
-							icon={<XCircleIcon size={14} />}
+							size="md"
+							icon={<XCircleIcon size={16} />}
 							onClick={() => {
 								if (approvalId) {
 									addToolApprovalResponse({ id: approvalId, approved: false });
 								}
 							}}
+							className="flex-1 justify-center"
 						>
 							Reject
 						</Button>
