@@ -10,6 +10,9 @@ import {
   tool
 } from "ai";
 import { z } from "zod";
+import { normalizeError, redactSecrets, generateSignature, extractSignals } from "./analyze";
+import { findTopMatches } from "./match";
+import type { IncidentRecord } from "./match";
 
 export class ChatAgent extends AIChatAgent<Env> {
   maxPersistedMessages = 100;
@@ -172,6 +175,52 @@ ${getSchedulePrompt({ date: new Date() })}`,
         ...mcpTools,
 
         // Phase 2: Signal Extraction Tools
+        analyzeError: tool({
+          description: "Analyze and normalize an error trace or log output. ALWAYS use this first when a user posts an error.",
+          inputSchema: z.object({
+            raw: z.string().describe("The raw error text, stack trace, or log")
+          }),
+          execute: async ({ raw }) => {
+            const redacted = redactSecrets(raw);
+            let normalized = normalizeError(redacted);
+            let truncated = false;
+            
+            if (normalized.split('\\n').length > 100) {
+              const lines = normalized.split('\\n');
+              normalized = [...lines.slice(0, 60), '... [TRUNCATED] ...', ...lines.slice(-40)].join('\\n');
+              truncated = true;
+            }
+            
+            const signals = extractSignals(normalized);
+            const signature = await generateSignature(signals.errorType, signals.service, normalized);
+            
+            return {
+              service: signals.service,
+              errorType: signals.errorType,
+              signature,
+              keywords: signals.keywords,
+              truncated
+            };
+          }
+        }),
+
+        findSimilarIncidents: tool({
+          description: "Find similar past incidents using an error signature and signals. Returns the top matches.",
+          inputSchema: z.object({
+            signature: z.string().describe("The error signature from analyzeError"),
+            service: z.string().describe("The service name"),
+            errorType: z.string().describe("The error type"),
+            keywords: z.array(z.string()).describe("List of keywords from analyzeError")
+          }),
+          execute: async (query) => {
+            // In a real app we'd query all or pre-filter. We'll fetch all active/resolved.
+            const allIncidents = this.sql`SELECT * FROM incidents` as IncidentRecord[];
+            const matches = findTopMatches(query, allIncidents);
+            if (matches.length === 0) return { result: "no similar incident found" };
+            return matches;
+          }
+        }),
+
         getIncidentDetails: tool({
           description: "Get detailed information about a specific incident.",
           inputSchema: z.object({

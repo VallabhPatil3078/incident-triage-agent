@@ -37,6 +37,7 @@
   "devDependencies": {
     "@babel/plugin-proposal-decorators": "^8.0.2",
     "@cloudflare/vite-plugin": "^1.46.0",
+    "@cloudflare/vitest-plugin": "^1.1.13",
     "@rolldown/plugin-babel": "^0.2.3",
     "@tailwindcss/vite": "^4.3.1",
     "@types/node": "^26.0.1",
@@ -48,6 +49,7 @@
     "tailwindcss": "^4.3.1",
     "typescript": "^6.0.3",
     "vite": "^8.1.0",
+    "vitest": "^5.0.1",
     "wrangler": "^4.135.0"
   },
   "allowScripts": {
