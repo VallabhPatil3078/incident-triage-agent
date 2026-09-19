@@ -142,3 +142,5 @@ dist
 .wrangler
 .dev.vars
 
+# AI Agent Instructions
+PLAN.md
