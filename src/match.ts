@@ -43,7 +43,12 @@ export function calculateScore(
 	const signatureExact = query.signature === incident.signature ? 1 : 0;
 
 	let serviceMatch = 0;
-	if (query.service && incident.service) {
+	if (
+		query.service &&
+		incident.service &&
+		query.service !== "unknown" &&
+		incident.service !== "unknown"
+	) {
 		if (query.service.toLowerCase() === incident.service.toLowerCase())
 			serviceMatch = 1;
 		else if (query.service.split("-")[0] === incident.service.split("-")[0])
@@ -53,7 +58,14 @@ export function calculateScore(
 	const keywordText = query.keywords.join(" ");
 	const tokenMatch = jaccardSimilarity(keywordText, incident.symptoms);
 
-	const errorTypeMatch = query.errorType === incident.error_type ? 1 : 0;
+	const errorTypeMatch =
+		query.errorType &&
+		incident.error_type &&
+		query.errorType !== "unknown" &&
+		incident.error_type !== "unknown" &&
+		query.errorType === incident.error_type
+			? 1
+			: 0;
 
 	let score =
 		0.4 * signatureExact +

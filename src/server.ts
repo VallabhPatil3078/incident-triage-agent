@@ -7,7 +7,8 @@ import {
 	pruneMessages,
 	stepCountIs,
 	streamText,
-	tool
+	tool,
+	generateObject
 } from "ai";
 import { z } from "zod";
 import {
@@ -30,6 +31,11 @@ export class ChatAgent extends AIChatAgent<Env, AgentState> {
 	// Wait for MCP connections to be re-established after hibernation before
 	// processing a message, so MCP tools aren't intermittently missing.
 	waitForMcpConnections = true;
+
+	initialState: AgentState = {
+		activeIncidentId: null,
+		lastMatchIds: []
+	};
 
 	onStart() {
 		// Configure OAuth popup behavior for MCP servers that require authentication
@@ -500,115 +506,186 @@ ${getSchedulePrompt({ date: new Date() })}`,
 				analyzeError: tool({
 					description:
 						"Analyze and normalize an error trace or log output. ALWAYS use this first when a user posts an error.",
-					inputSchema: z.object({
-						raw: z.string().describe("The raw error text, stack trace, or log")
-					}),
-					execute: async ({ raw }) => {
-						const redacted = redactSecrets(raw);
-						let normalized = normalizeError(redacted);
-						let truncated = false;
+					inputSchema: z
+						.object({
+							raw: z
+								.any()
+								.optional()
+								.describe("The raw error text, stack trace, or log")
+						})
+						.catchall(z.any()),
+					execute: async (args) => {
+						try {
+							let rawStr = "";
+							if (typeof args.raw === "string") rawStr = args.raw;
+							else if (args.raw) rawStr = JSON.stringify(args.raw);
+							else rawStr = JSON.stringify(args);
 
-						if (normalized.split("\\n").length > 100) {
-							const lines = normalized.split("\\n");
-							normalized = [
-								...lines.slice(0, 60),
-								"... [TRUNCATED] ...",
-								...lines.slice(-40)
-							].join("\\n");
-							truncated = true;
-						}
+							const redacted = redactSecrets(rawStr);
+							let normalized = normalizeError(redacted);
+							let truncated = false;
 
-						const signals = extractSignals(normalized);
+							if (normalized.split("\n").length > 100) {
+								const lines = normalized.split("\n");
+								normalized = [
+									...lines.slice(0, 60),
+									"... [TRUNCATED] ...",
+									...lines.slice(-40)
+								].join("\n");
+								truncated = true;
+							}
 
-						if (!signals.service || !signals.errorType) {
-							return {
-								incidentId: null,
-								service: signals.service,
-								errorType: signals.errorType,
-								signature: null,
-								keywords: signals.keywords,
-								truncated,
-								needsMoreInfo: true
-							};
-						}
+							const signals = extractSignals(normalized);
 
-						const signature = await generateSignature(
-							signals.errorType,
-							signals.service,
-							normalized
-						);
+							if (!signals.service || !signals.errorType) {
+								try {
+									const { object } = await generateObject({
+										model: workersai("@cf/meta/llama-3.1-8b-instruct", {
+											sessionAffinity: this.sessionAffinity
+										}),
+										system:
+											"Extract the service name, error type, and any keywords from the following error log. If you cannot find a clear service or error type, leave them as empty strings.",
+										prompt: normalized,
+										schema: z.object({
+											service: z.string(),
+											errorType: z.string(),
+											keywords: z.array(z.string())
+										})
+									});
 
-						// Create or reuse open incident
-						const existingOpen = this
-							.sql`SELECT id FROM incidents WHERE signature = ${signature} AND service = ${signals.service} AND status = 'open'` as {
-							id: string;
-						}[];
-						let incidentId = "";
-						if (existingOpen.length > 0) {
-							incidentId = existingOpen[0].id;
-						} else {
-							incidentId = `INC-${Date.now()}`;
-							const title = `${signals.service}: ${signals.errorType} - ${normalized.split("\n")[0].substring(0, 100)}`;
-							const symptoms = signals.keywords.join(" ");
+									if (object.service)
+										signals.service = object.service.toLowerCase();
+									if (object.errorType) signals.errorType = object.errorType;
+									if (object.keywords)
+										signals.keywords = [
+											...new Set([...signals.keywords, ...object.keywords])
+										];
+								} catch (e) {
+									console.error("LLM fallback failed:", e);
+								}
 
-							this.sql`
+								if (!signals.service || !signals.errorType) {
+									return {
+										incidentId: null,
+										service: signals.service || "",
+										errorType: signals.errorType || "",
+										signature: null,
+										keywords: signals.keywords,
+										truncated,
+										needsMoreInfo: true
+									};
+								}
+							}
+
+							const signature = await generateSignature(
+								signals.errorType,
+								signals.service,
+								normalized
+							);
+
+							// Create or reuse open incident
+							const existingOpen = this
+								.sql`SELECT id FROM incidents WHERE signature = ${signature} AND service = ${signals.service} AND status = 'open'` as {
+								id: string;
+							}[];
+							let incidentId = "";
+							if (existingOpen.length > 0) {
+								incidentId = existingOpen[0].id;
+							} else {
+								incidentId = `INC-${Date.now()}`;
+								const title = `${signals.service}: ${signals.errorType} - ${normalized.split("\n")[0].substring(0, 100)}`;
+								const symptoms = signals.keywords.join(" ");
+
+								this.sql`
 								INSERT INTO incidents (
 									id, service, signature, error_type, title, symptoms, status, source, occurred_at
 								) VALUES (
 									${incidentId}, ${signals.service}, ${signature}, ${signals.errorType}, ${title}, ${symptoms}, 'open', 'learned', ${Date.now()}
 								)
 							`;
+							}
+
+							this.setState({
+								activeIncidentId: incidentId,
+								lastMatchIds: this.state?.lastMatchIds || []
+							});
+
+							return {
+								incidentId,
+								service: signals.service,
+								errorType: signals.errorType,
+								signature,
+								keywords: signals.keywords,
+								truncated,
+								needsMoreInfo: false
+							};
+						} catch (err) {
+							console.error("TOOL CRASH inside analyzeError:", err);
+							return {
+								incidentId: null,
+								service: "unknown",
+								errorType: "unknown",
+								signature: null,
+								keywords: [],
+								truncated: false,
+								needsMoreInfo: true,
+								internalError: err instanceof Error ? err.message : String(err)
+							};
 						}
-
-						this.setState({
-							activeIncidentId: incidentId,
-							lastMatchIds: this.state?.lastMatchIds || []
-						});
-
-						return {
-							incidentId,
-							service: signals.service,
-							errorType: signals.errorType,
-							signature,
-							keywords: signals.keywords,
-							truncated,
-							needsMoreInfo: false
-						};
 					}
 				}),
 
 				findSimilarIncidents: tool({
 					description:
 						"Find similar past incidents using an error signature and signals. Returns the top matches.",
-					inputSchema: z.object({
-						signature: z
-							.string()
-							.describe("The error signature from analyzeError"),
-						service: z.string().describe("The service name"),
-						errorType: z.string().describe("The error type"),
-						keywords: z
-							.array(z.string())
-							.describe("List of keywords from analyzeError")
-					}),
+					inputSchema: z
+						.object({
+							signature: z
+								.string()
+								.optional()
+								.describe("The error signature from analyzeError"),
+							service: z.string().optional().describe("The service name"),
+							errorType: z.string().optional().describe("The error type"),
+							keywords: z
+								.array(z.string())
+								.optional()
+								.describe("List of keywords from analyzeError")
+						})
+						.catchall(z.any()),
 					execute: async (query) => {
-						// query only resolved incidents
-						const allResolved = this
-							.sql`SELECT * FROM incidents WHERE status = 'resolved'` as IncidentRecord[];
+						try {
+							// query only resolved incidents
+							const allResolved = this
+								.sql`SELECT * FROM incidents WHERE status = 'resolved'` as IncidentRecord[];
 
-						// exclude active incident
-						const activeId = this.state?.activeIncidentId;
-						const candidates = allResolved.filter((inc) => inc.id !== activeId);
+							// exclude active incident
+							const activeId = this.state?.activeIncidentId;
+							const candidates = allResolved.filter(
+								(inc) => inc.id !== activeId
+							);
 
-						const matches = findTopMatches(query, candidates);
+							const safeQuery = {
+								signature: query.signature || "",
+								service: query.service || "",
+								errorType: query.errorType || "",
+								keywords: query.keywords || []
+							};
+							const matches = findTopMatches(safeQuery, candidates);
 
-						this.setState({
-							activeIncidentId: this.state?.activeIncidentId || null,
-							lastMatchIds: matches.map((m) => m.id)
-						});
+							this.setState({
+								activeIncidentId: this.state?.activeIncidentId || null,
+								lastMatchIds: matches.map((m) => m.id)
+							});
 
-						if (matches.length === 0)
-							return { result: "no similar incident found" };
-						return matches;
+							if (matches.length === 0)
+								return { result: "no similar incident found" };
+							return matches;
+						} catch (err) {
+							console.error("TOOL CRASH inside findSimilarIncidents:", err);
+							return {
+								internalError: err instanceof Error ? err.message : String(err)
+							};
+						}
 					}
 				}),
 
@@ -643,18 +720,15 @@ ${getSchedulePrompt({ date: new Date() })}`,
 
 				getRunbook: tool({
 					description:
-						"Get the runbook for a specific error pattern or service.",
+						"Get the runbook for a specific error pattern or service. Use the runbookId returned from findSimilarIncidents.",
 					inputSchema: z.object({
-						error_type: z
+						id: z
 							.string()
-							.describe("The error type to look up (e.g. PoolExhausted)")
+							.describe("The ID of the runbook to look up (e.g. RB-001)")
 					}),
-					execute: async ({ error_type }) => {
-						const rows = this
-							.sql`SELECT * FROM runbooks WHERE error_type = ${error_type}`;
-						return rows.length > 0
-							? rows[0]
-							: { error: "No runbook found for this error type" };
+					execute: async ({ id }) => {
+						const rows = this.sql`SELECT * FROM runbooks WHERE id = ${id}`;
+						return rows.length > 0 ? rows[0] : { error: "not_found" };
 					}
 				}),
 

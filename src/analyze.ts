@@ -104,8 +104,8 @@ export async function generateSignature(
 }
 
 export function extractSignals(text: string) {
-	let errorType = "unknown";
-	let service = "unknown";
+	let errorType = "";
+	let service = "";
 	const keywords: string[] = [];
 
 	// Try to find error classes

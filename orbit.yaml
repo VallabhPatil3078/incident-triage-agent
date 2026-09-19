@@ -1,0 +1,23 @@
+version: 1
+
+tasks:
+  format:
+    command: "npx oxfmt --check ."
+    depends_on: []
+    trigger_paths: ["**/*.ts", "**/*.md", "**/*.json", "**/*.jsonc"]
+
+  lint:
+    command: "npm run lint"
+    depends_on: []
+    trigger_paths: ["src/**/*.ts"]
+
+  typecheck:
+    command: "npx tsc --noEmit"
+    depends_on: ["lint"]
+    trigger_paths:
+      ["src/**/*.ts", "tsconfig.json", "env.d.ts", "worker-configuration.d.ts"]
+
+  test:
+    command: "npx vitest run"
+    depends_on: ["typecheck"]
+    trigger_paths: ["src/**/*.ts"]
