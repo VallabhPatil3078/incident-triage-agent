@@ -10,6 +10,12 @@ export interface IncidentRecord {
 	runbook_id: string;
 	success_count: number;
 	fail_count: number;
+	status: string;
+	source: string;
+	outcome: string;
+	occurred_at: number;
+	resolved_at: number;
+	merged_into: string | null;
 }
 
 export function jaccardSimilarity(textA: string, textB: string): number {
